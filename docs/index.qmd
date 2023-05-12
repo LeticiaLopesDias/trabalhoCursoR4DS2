@@ -14,34 +14,30 @@ format:
     toc: true
     code-tools: true
     theme: journal
-title-block-banner: "#E76D83"
+title-block-banner: "#8B2635"
 editor: visual
 ---
 
 ## Contexto
 
-
-
 ## Base de dados
 
-```{r conf_iniciais}
-# remotes::install_github("curso-r/basesCursoR")
-
-imdb <- basesCursoR::pegar_base("imdb_completa")
-imdb_pessoas <- basesCursoR::pegar_base("imdb_pessoas")
-imdb_avaliacoes <- basesCursoR::pegar_base("imdb_avaliacoes")
-
+```{r}
 library(tidyverse)
+
+# remotes::install_github("curso-r/basesCursoR")
+imdb <- basesCursoR::pegar_base("imdb_completa")
+# imdb_pessoas <- basesCursoR::pegar_base("imdb_pessoas")
+# imdb_avaliacoes <- basesCursoR::pegar_base("imdb_avaliacoes")
 
 ```
 
-
 ## Perguntas
 
-1. Qual o mês do ano com o maior número de filmes? E o dia do ano?
+### 1. Qual o mês do ano com o maior número de filmes? E o dia do ano?
 
 ```{r calc_mes}
-# glimpse(imdb)
+#| echo: true
 
 imdb_2 <- imdb |> 
   filter(str_detect(imdb$data_lancamento, "[0-9]{4}-[0-9]{2}-[0-9]{2}")) |> 
@@ -50,48 +46,129 @@ imdb_2 <- imdb |>
          mes_comp = month(data_lancamento, label = TRUE, locale = "pt_BR", abbr = F),
          dia = day(data_lancamento))
 
-# range(imdb_2$ano)
-
 maior_mes <- imdb_2 |> 
+  group_by(ano) |> 
   count(mes_comp) |> 
-  filter(n == max(n)) |> 
+  group_by(mes_comp) |> 
+  summarise(media = mean(n, na.rm = T)) |> 
+  filter(media == max(media)) |> 
   pull(mes_comp)
 
-#filter(filmes_mes, maior_mes == "sim") |> pull(mes)
+
+maior_dia <- imdb_2 |> 
+  group_by(ano) |>
+  count(dia) |> 
+  group_by(dia) |> 
+  summarise(media = mean(n, na.rm = T)) |> 
+  filter(media == max(media))
 
 
 ```
 
-Considerando os anos de `r min(imdb_2$ano)` a `r max(imdb_2$ano)`, o mês com o maior número de filmes foi `r maior_mes`, como destacado no gráfico abaixo. 
+Considerando os anos de `r min(imdb_2$ano)` a `r max(imdb_2$ano)`, o mês do ano com o maior número de filmes, em média, foi `r maior_mes`. Já o dia com o maior número de filmes, em média, foi `r maior_dia`, como destacado nos gráficos abaixo.
 
+::: panel-tabset
+## Filmes por mês
 
 ```{r}
+
 imdb_2 |> 
   count(mes_abr) |> 
   mutate(maior_mes = if_else(n == max(n), "sim", "não")) |> 
   ggplot() +
   geom_col(aes(x = mes_abr, y = n, fill = maior_mes)) +
-  scale_fill_manual(values = c("grey", "#E76D83")) +
+  scale_fill_manual(values = c("grey", "#8B2635")) +
   scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
   labs(x = element_blank(),
-       y = "Nº de filmes") +
+       y = "Média de filmes por ano") +
   theme_classic() + 
   theme(legend.position = "none")
+
 ```
 
-2. Qual o top 5 países com mais filmes na base?
+## Filmes por dia
 
-3. Liste todas as moedas que aparecem nas colunas \`orcamento\` e \`receita\` da base \`imdb_completa\`.
+```{r}
 
-4. Considerando apenas orçamentos e receitas em dólar (\$), qual o gênero com maior lucro? E com maior nota média?
+imdb_2 |> 
+  count(dia) |> 
+  mutate(maior_dia = if_else(n == max(n), "sim", "não")) |> 
+  ggplot() +
+  geom_col(aes(x = as.factor(dia), y = n, fill = maior_dia)) +
+  scale_fill_manual(values = c("grey", "#8B2635")) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05)),
+                     n.breaks = 7) +
+  labs(x = element_blank(),
+       y = "Média de filmes por ano") +
+  theme_classic() + 
+  theme(legend.position = "none")
 
-5. Dentre os filmes na base \`imdb_completa\`, escolha o seu favorito. Então faça os itens a seguir:
+```
+:::
 
-a) Quem dirigiu o filme? Faça uma ficha dessa pessoa: idade (hoje em dia ou data de falecimento), onde nasceu, quantos filmes já dirigiu, qual o lucro médio dos filmes que dirigiu (considerando apenas valores em dólar) e outras informações que achar interessante (base \`imdb_pessoas\`).
+### 2. Qual o top 5 países com mais filmes na base?
 
-b) Qual a posição desse filme no ranking de notas do IMDB? E no ranking de lucro (considerando apenas valores em dólar)?
+Na tabela abaixo, estão os países com mais filmes na base IMDB.
 
-c) Em que dia esse filme foi lançado? E dia da semana? Algum outro filme foi lançado no mesmo dia? Quantos anos você tinha nesse dia?
+```{r}
+#| echo: true
 
-d) Faça um gráfico representando a distribuição da nota atribuída a esse filme por idade (base \`imdb_avaliacoes\`).
+imdb |> 
+  separate_longer_delim(pais, delim = ",") |> 
+  count(pais) |> 
+  slice_max(order_by = n, n = 5) |> 
+  mutate(pais = fct_recode(as_factor(pais), 
+                           "EUA" = "USA",
+                           "Índia" = "India",
+                           "Reino Unido" = "UK",
+                           "França" = "France",
+                           "Itália" = "Italy")) |> 
+  rename(`País` = pais,
+         `Nº de filmes` = n) |> 
+  knitr::kable()
 
+
+```
+
+### 3.  Liste todas as moedas que aparecem nas colunas \`orcamento\` e \`receita\` da base \`imdb_completa\`.
+
+```{r}
+
+identifica_moedas <- function(col) {
+
+  imdb |> 
+  filter(!is.na({{ col }})) |> 
+  distinct({{ col }}) |>
+  pull({{ col }}) |> 
+  str_remove_all(" [0-9]+") |> 
+  unique()
+    
+}
+
+c(identifica_moedas(orcamento), identifica_moedas(receita)) |> 
+  unique() |> 
+  as_tibble() |> 
+  rename(Moeda = value) |> 
+  DT::datatable()
+
+
+
+```
+
+
+
+
+4.  Considerando apenas orçamentos e receitas em dólar (\$), qual o gênero com maior lucro? E com maior nota média?
+
+5.  Dentre os filmes na base \`imdb_completa\`, escolha o seu favorito. Então faça os itens a seguir:
+
+```{=html}
+<!-- -->
+```
+a)  Quem dirigiu o filme? Faça uma ficha dessa pessoa: idade (hoje em dia ou data de falecimento), onde nasceu, quantos filmes já dirigiu, qual o lucro médio dos filmes que dirigiu (considerando apenas valores em dólar) e outras informações que achar interessante (base \`imdb_pessoas\`).
+
+b)  Qual a posição desse filme no ranking de notas do IMDB? E no ranking de lucro (considerando apenas valores em dólar)?
+
+c)  Em que dia esse filme foi lançado? E dia da semana? Algum outro filme foi lançado no mesmo dia? Quantos anos você tinha nesse dia?
+
+d)  Faça um gráfico representando a distribuição da nota atribuída a esse filme por idade (base \`imdb_avaliacoes\`).
