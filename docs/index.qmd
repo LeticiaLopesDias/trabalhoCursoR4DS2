@@ -6,7 +6,7 @@ lang: pt
 date: "`r format(Sys.Date())`" 
 date-format: short
 execute:
-  echo: false
+  echo: true
   warning: false
   message: false
 format:
@@ -20,14 +20,14 @@ editor: visual
 
 ## Contexto
 
-## Base de dados
+Esse relatório se trata do Trabalho de Conclusão do curso de R para Ciência de Dados II, da <a href="https://curso-r.com/" target="_blank">Curso-R</a> (turma 03/2023).
+
+Para responder às perguntas propostas, foram utilizadas as bases de filmes do IMDB, acessadas com o código a seguir.
 
 ```{r}
-library(tidyverse)
 
-# remotes::install_github("curso-r/basesCursoR")
 imdb <- basesCursoR::pegar_base("imdb_completa")
-# imdb_pessoas <- basesCursoR::pegar_base("imdb_pessoas")
+imdb_pessoas <- basesCursoR::pegar_base("imdb_pessoas")
 # imdb_avaliacoes <- basesCursoR::pegar_base("imdb_avaliacoes")
 
 ```
@@ -37,7 +37,8 @@ imdb <- basesCursoR::pegar_base("imdb_completa")
 ### 1. Qual o mês do ano com o maior número de filmes? E o dia do ano?
 
 ```{r calc_mes}
-#| echo: true
+
+library(tidyverse)
 
 imdb_2 <- imdb |> 
   filter(str_detect(imdb$data_lancamento, "[0-9]{4}-[0-9]{2}-[0-9]{2}")) |> 
@@ -60,7 +61,8 @@ maior_dia <- imdb_2 |>
   count(dia) |> 
   group_by(dia) |> 
   summarise(media = mean(n, na.rm = T)) |> 
-  filter(media == max(media))
+  filter(media == max(media)) |> 
+  pull(dia)
 
 
 ```
@@ -71,6 +73,10 @@ Considerando os anos de `r min(imdb_2$ano)` a `r max(imdb_2$ano)`, o mês do ano
 ## Filmes por mês
 
 ```{r}
+#| echo: false
+#| fig-width: 6
+#| fig-height: 4
+#| fig-align: "center"
 
 imdb_2 |> 
   count(mes_abr) |> 
@@ -89,6 +95,11 @@ imdb_2 |>
 ## Filmes por dia
 
 ```{r}
+#| echo: false
+#| fig-width: 6
+#| fig-height: 4
+#| fig-align: "center"
+
 
 imdb_2 |> 
   count(dia) |> 
@@ -108,7 +119,7 @@ imdb_2 |>
 
 ### 2. Qual o top 5 países com mais filmes na base?
 
-Na tabela abaixo, estão os países com mais filmes na base IMDB.
+Na tabela abaixo, estão os 5 países com mais filmes.
 
 ```{r}
 #| echo: true
@@ -130,19 +141,19 @@ imdb |>
 
 ```
 
-### 3.  Liste todas as moedas que aparecem nas colunas \`orcamento\` e \`receita\` da base \`imdb_completa\`.
+### 3. Liste todas as moedas que aparecem nas colunas \`orcamento\` e \`receita\` da base \`imdb_completa\`.
+
+Na tabela abaixo, estão listadas todas as moedas.
 
 ```{r}
 
 identifica_moedas <- function(col) {
-
   imdb |> 
   filter(!is.na({{ col }})) |> 
   distinct({{ col }}) |>
   pull({{ col }}) |> 
   str_remove_all(" [0-9]+") |> 
   unique()
-    
 }
 
 c(identifica_moedas(orcamento), identifica_moedas(receita)) |> 
@@ -155,17 +166,171 @@ c(identifica_moedas(orcamento), identifica_moedas(receita)) |>
 
 ```
 
+### 4. Considerando apenas orçamentos e receitas em dólar (\$), qual o gênero com maior lucro? E com maior nota média?
+
+```{r}
+
+imdb_genero <- imdb |> 
+  filter(str_detect(orcamento, "\\$") & str_detect(receita, "\\$")) |> 
+  mutate(orcamento_num = str_remove(orcamento, "\\$ ") |> as.double(),
+         receita_num = str_remove(receita, "\\$ ") |> as.double(),
+         lucro = receita_num - orcamento_num) |>
+  separate_longer_delim(genero, delim = ",") |>  
+  mutate(genero = str_squish(genero)) |> 
+  mutate(genero = fct_recode(as_factor(genero), 
+                           "Ação" = "Action",
+                           "Aventura" = "Adventure",
+                           "Animação" = "Animation",
+                           "Biografia" = "Biography",
+                           "Comédia" = "Comedy",
+                           "Família" = "Family",
+                           "Fantasia" = "Fantasy",
+                           "Suspense" =  "Thriller",
+                           "Musical" = "Music",
+                           "Faroeste" = "Western",
+                           "Guerra" = "War",
+                           "Histórico" = "History",
+                           "Documentário" = "Documentary"
+                           )) |> 
+  group_by(genero) |> 
+  summarise(lucro_total = sum(lucro, na.rm = T),
+            nota_media = mean(nota_imdb, na.rm = T),
+            n = n())
+
+maior_lucro <- imdb_genero |> 
+  filter(lucro_total == max(lucro_total)) |> 
+  pull(genero)
+
+maior_nota <- imdb_genero |> 
+  filter(nota_media == max(nota_media)) |> 
+   pull(genero)
 
 
-
-4.  Considerando apenas orçamentos e receitas em dólar (\$), qual o gênero com maior lucro? E com maior nota média?
-
-5.  Dentre os filmes na base \`imdb_completa\`, escolha o seu favorito. Então faça os itens a seguir:
-
-```{=html}
-<!-- -->
 ```
+
+Considerando os filmes lançados entre `r min(imdb$ano)` a `r max(imdb$ano)`, o gênero com maior lucro total foi "`r maior_lucro`" e aquele com maior nota média foi "`r maior_nota`". Os gráficos abaixo apresentam o lucro e a nota para os top dez gêneros.
+
+::: panel-tabset
+## Lucro
+
+```{r}
+#| echo: false
+#| fig-width: 7
+#| fig-height: 4
+#| fig-align: "center"
+
+imdb_genero |> 
+  slice_max(order_by = lucro_total, n = 10) |> 
+  mutate(maior_lucro = if_else(lucro_total == max(lucro_total), "sim", "não"),
+         genero = fct_reorder(genero, desc(lucro_total))) |> 
+  ggplot() +
+  geom_col(aes(x = genero, y = lucro_total, fill = maior_lucro)) +
+  scale_fill_manual(values = c("grey", "#8B2635")) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05)),
+                     n.breaks = 8,
+                     labels = scales::number_format(big.mark = ".",
+                                                    decimal.mark = ",",
+                                                    scale = 1e-6,
+                                                    suffix = " M")) +
+  labs(x = element_blank(),
+       y = "Lucro (US$)") +
+  theme_classic() + 
+  theme(legend.position = "none")
+
+```
+
+## Nota média
+
+```{r}
+#| echo: false
+#| fig-width: 7
+#| fig-height: 4
+#| fig-align: "center"
+
+imdb_genero |> 
+  slice_max(order_by = nota_media, n = 10) |> 
+  mutate(maior_nota = if_else(nota_media == max(nota_media), "sim", "não"),
+         genero = fct_reorder(genero, desc(nota_media))) |> 
+  ggplot() +
+  geom_col(aes(x = genero, y = nota_media, fill = maior_nota)) +
+  scale_fill_manual(values = c("grey", "#8B2635")) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05)),
+                     n.breaks = 8) +
+  labs(x = element_blank(),
+       y = "Nota média") +
+  theme_classic() + 
+  theme(legend.position = "none")
+
+```
+:::
+
+### 5. Dentre os filmes na base \`imdb_completa\`, escolha o seu favorito. Então faça os itens a seguir:
+
 a)  Quem dirigiu o filme? Faça uma ficha dessa pessoa: idade (hoje em dia ou data de falecimento), onde nasceu, quantos filmes já dirigiu, qual o lucro médio dos filmes que dirigiu (considerando apenas valores em dólar) e outras informações que achar interessante (base \`imdb_pessoas\`).
+
+```{r}
+
+diretor <- imdb |> 
+  filter(titulo == "Hunger Games") |> 
+  pull(direcao)
+
+idade <- imdb_pessoas |> 
+  filter(nome == diretor) |> 
+  mutate(data_nascimento = ymd(data_nascimento),
+         idade = Sys.Date() - data_nascimento) |> 
+  mutate(idade = round(as.period(idade) / years(1))) |> 
+  pull(idade)
+
+local <- imdb_pessoas |> 
+  filter(nome == diretor) |> 
+  pull(local_nascimento)
+
+conjuge <- imdb_pessoas |> 
+  filter(nome == diretor) |> 
+  pull(nome_conjuges) |> 
+  str_extract("[A-Z][a-z]+ [A-Z][a-z]+")
+
+filmes <- imdb |> 
+  filter(str_detect(direcao, diretor))
+  
+lucro_medio <- filmes |> 
+  filter(str_detect(orcamento, "\\$") & str_detect(receita, "\\$")) |> 
+  mutate(orcamento_num = str_remove(orcamento, "\\$ ") |> as.double(),
+         receita_num = str_remove(receita, "\\$ ") |> as.double(),
+         lucro = receita_num - orcamento_num) |> 
+  summarise(lucro_medio = mean(lucro, na.rm = T)) |>
+  pull(lucro_medio) |> 
+  scales::number(big.mark = ".")
+ 
+```
+
+* Filme: Jogos Vorazes (*Hunger Games*, em inglês) 
+* Dirigido por `r diretor`
+  * Idade: `r idade` anos 
+  * Onde nasceu: `r local`
+  * Cônjuge: `r conjuge` (divorciado em 2016) 
+  * Quantos filmes dirigiu: `r nrow(filmes)`
+  * Lucro médio dos filmes dirigidos: US$ `r lucro_medio`
+  
+Abaixo estão os filmes dirigidos por `r diretor`.
+
+```{r}
+#| echo: false
+
+filmes |>
+  select(titulo, ano, genero, orcamento, receita, nota_imdb) |> 
+  rename("Filme" = titulo,
+         "Ano de lançamento" = ano, 
+         "Gênero" = genero, 
+         "Orçamento" =  orcamento, 
+         "Receita" =  receita, 
+         "Nota (IMDB)" =  nota_imdb) |> 
+  knitr::kable()
+
+
+```
+
+
 
 b)  Qual a posição desse filme no ranking de notas do IMDB? E no ranking de lucro (considerando apenas valores em dólar)?
 
