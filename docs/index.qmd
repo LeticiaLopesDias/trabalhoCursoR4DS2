@@ -28,7 +28,7 @@ Para responder às perguntas propostas, foram utilizadas as bases de filmes do I
 
 imdb <- basesCursoR::pegar_base("imdb_completa")
 imdb_pessoas <- basesCursoR::pegar_base("imdb_pessoas")
-# imdb_avaliacoes <- basesCursoR::pegar_base("imdb_avaliacoes")
+imdb_avaliacoes <- basesCursoR::pegar_base("imdb_avaliacoes")
 
 ```
 
@@ -123,6 +123,8 @@ Na tabela abaixo, estão os 5 países com mais filmes.
 
 ```{r}
 #| echo: true
+#| fig-width: 6
+
 
 imdb |> 
   separate_longer_delim(pais, delim = ",") |> 
@@ -138,8 +140,8 @@ imdb |>
          `Nº de filmes` = n) |> 
   knitr::kable()
 
-
 ```
+
 
 ### 3. Liste todas as moedas que aparecem nas colunas \`orcamento\` e \`receita\` da base \`imdb_completa\`.
 
@@ -170,11 +172,14 @@ c(identifica_moedas(orcamento), identifica_moedas(receita)) |>
 
 ```{r}
 
-imdb_genero <- imdb |> 
+imdb_lucro <- imdb |> 
   filter(str_detect(orcamento, "\\$") & str_detect(receita, "\\$")) |> 
   mutate(orcamento_num = str_remove(orcamento, "\\$ ") |> as.double(),
          receita_num = str_remove(receita, "\\$ ") |> as.double(),
-         lucro = receita_num - orcamento_num) |>
+         lucro = receita_num - orcamento_num)
+ 
+
+imdb_genero <- imdb_lucro |>
   separate_longer_delim(genero, delim = ",") |>  
   mutate(genero = str_squish(genero)) |> 
   mutate(genero = fct_recode(as_factor(genero), 
@@ -208,7 +213,7 @@ maior_nota <- imdb_genero |>
 
 ```
 
-Considerando os filmes lançados entre `r min(imdb$ano)` a `r max(imdb$ano)`, o gênero com maior lucro total foi "`r maior_lucro`" e aquele com maior nota média foi "`r maior_nota`". Os gráficos abaixo apresentam o lucro e a nota para os top dez gêneros.
+Considerando os filmes lançados entre `r min(imdb$ano, na.rm = T)` a `r max(imdb$ano, na.rm = T)`, o gênero com maior lucro total foi "`r maior_lucro`" e aquele com maior nota média foi "`r maior_nota`". Os gráficos abaixo apresentam o lucro e a nota para os top dez gêneros.
 
 ::: panel-tabset
 ## Lucro
@@ -293,11 +298,8 @@ conjuge <- imdb_pessoas |>
 filmes <- imdb |> 
   filter(str_detect(direcao, diretor))
   
-lucro_medio <- filmes |> 
-  filter(str_detect(orcamento, "\\$") & str_detect(receita, "\\$")) |> 
-  mutate(orcamento_num = str_remove(orcamento, "\\$ ") |> as.double(),
-         receita_num = str_remove(receita, "\\$ ") |> as.double(),
-         lucro = receita_num - orcamento_num) |> 
+lucro_medio <- imdb_lucro |> 
+  filter(str_detect(direcao, diretor)) |> 
   summarise(lucro_medio = mean(lucro, na.rm = T)) |>
   pull(lucro_medio) |> 
   scales::number(big.mark = ".")
@@ -334,6 +336,87 @@ filmes |>
 
 b)  Qual a posição desse filme no ranking de notas do IMDB? E no ranking de lucro (considerando apenas valores em dólar)?
 
+
+```{r}
+
+calcula_posicao <- function(base, coluna) {
+  base |> 
+  select(titulo, {{ coluna }}) |> 
+  arrange(desc({{ coluna }})) |> 
+  mutate(posicao = 1:nrow(base)) |> 
+  filter(titulo == "Hunger Games")
+}
+
+
+pos_nota <- calcula_posicao(imdb, nota_imdb)
+
+pos_lucro <- calcula_posicao(imdb_lucro, lucro) |> 
+  mutate(lucro = scales::number(lucro, big.mark = ".", scale = 1e-6, suffix = " M"))
+
+
+```
+
+Considerando a nota do filme na base IMDB, Jogos Vorazes aparece na posição `r pull(pos_nota, posicao)`, com a nota `r pull(pos_nota, nota_imdb)`. 
+
+Já em termos de lucro, o filme está na posição `r pull(pos_lucro, posicao)` com um lucro de US$ `r pull(pos_lucro, lucro)`
+
 c)  Em que dia esse filme foi lançado? E dia da semana? Algum outro filme foi lançado no mesmo dia? Quantos anos você tinha nesse dia?
 
+
+```{r}
+data <- imdb_2 |> 
+  select(titulo, data_lancamento) |> 
+  filter(titulo == "Hunger Games") |> 
+  pull(data_lancamento) 
+
+dia_sem <- wday(data, label = TRUE, locale = "pt_BR", abbr = FALSE)
+
+outros_filmes <- imdb_2 |> 
+  filter(data_lancamento == data & titulo != "Hunger Games") |> 
+  select(titulo, direcao) |> 
+  rename("Filme" = titulo,
+         "Direção" = direcao)
+
+minha_idade <- data - dmy("08/05/1998") 
+minha_idade <- as.period(minha_idade) / years(1) 
+
+
+```
+
+Jogos Vorazes foi lançado em `r strftime(data, format = "%d/%m/%Y")` (`r dia_sem`). Nessa data, eu tinha `r round(minha_idade)` anos.
+
+Outros `r nrow(outros_filmes)` filmes foram lançados nesse mesmo dia, listados na tabela abaixo.
+
+```{r}
+#| echo: false
+
+outros_filmes |> knitr::kable()
+
+```
+
+
 d)  Faça um gráfico representando a distribuição da nota atribuída a esse filme por idade (base \`imdb_avaliacoes\`).
+
+A seguir é apresentado o gráfico com a média das nota atribuídas por cada categorias etária ao filme Jogos Vorazes.
+
+```{r}
+id <- imdb |> filter(titulo == "Hunger Games") |> pull(id_filme)
+
+imdb_avaliacoes |> 
+  filter(id_filme == id) |> 
+  select(contains("nota_media_idade")) |> 
+  pivot_longer(everything(), names_to = "idade", values_to = "nota") |> 
+  mutate(idade = str_remove(idade, "nota_media_idade_") |> str_replace("_", "-")) |> 
+  ggplot() +
+  geom_col(aes(x = idade, y = nota), fill = "#8B2635",
+           width = 0.7) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05)),
+                     n.breaks = 8
+                     ) +
+  labs(x = "Idade",
+       y = "Nota média") +
+  theme_classic()
+
+
+```
+
