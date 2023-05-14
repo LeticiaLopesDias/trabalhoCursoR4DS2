@@ -400,6 +400,10 @@ d)  Faça um gráfico representando a distribuição da nota atribuída a esse f
 A seguir é apresentado o gráfico com a média das nota atribuídas por cada categorias etária ao filme Jogos Vorazes.
 
 ```{r}
+#| fig-width: 7
+#| fig-height: 4
+#| fig-align: "center"
+
 id <- imdb |> filter(titulo == "Hunger Games") |> pull(id_filme)
 
 imdb_avaliacoes |> 
